@@ -116,6 +116,7 @@ form.editor input{font:inherit;font-size:14px;color:var(--ink);background:var(--
 .bars{position:absolute;left:0;right:0;bottom:2px;display:flex;flex-direction:column;gap:1px}
 .bar{height:4px;background:var(--tc)}
 .bar.s{margin-left:3px;border-radius:2px 0 0 2px}.bar.e{margin-right:3px;border-radius:0 2px 2px 0}
+.past-toggle{align-self:flex-start;font-size:13px;color:var(--muted)}
 .day.sel{outline:2px solid var(--travel);outline-offset:-2px}
 /* day details sheet: bottom sheet on phones, centred panel on wide screens */
 .scrim{position:fixed;inset:0;background:rgba(10,14,12,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
@@ -192,6 +193,7 @@ form.editor input{font-size:16px}
     <span>Tap any day for details</span>
   </div>
 
+  <button class="btn past-toggle" type="button" id="past-toggle" aria-expanded="false" hidden></button>
   <section class="months" id="months" aria-label="Calendar"></section>
 </div>
 
@@ -394,12 +396,17 @@ form.editor input{font-size:16px}
     tripByDay = {};
     trips.forEach(t => { for(let n=toN(t.start); n<=toN(t.end); n++) (tripByDay[n] ||= []).push(t); });
   }
+  let showPast = false;
+  const curMonth = (() => { const d = new Date(TODAY*864e5); return d.getUTCFullYear()*12 + d.getUTCMonth(); })();
+  $('past-toggle').onclick = () => { showPast = !showPast; renderMonths(); };
   function renderMonths(){
     const box = $('months'); box.replaceChildren();
+    let pastCount = 0;
     const from = new Date(toN(CAL_FROM)*864e5), to = new Date(toN(CAL_TO)*864e5);
     let y = from.getUTCFullYear(), m = from.getUTCMonth();
     while (y < to.getUTCFullYear() || (y === to.getUTCFullYear() && m <= to.getUTCMonth())) {
       const sec = document.createElement('div'); sec.className='month'; sec.id='m-'+y+'-'+(m+1);
+      if (y*12 + m < curMonth) { pastCount++; sec.hidden = !showPast; }
       const first = Date.UTC(y,m,1)/864e5, days = new Date(Date.UTC(y,m+1,0)).getUTCDate();
       let on = 0; for (let i=0;i<days;i++) if (isOn(first+i)) on++;
       const h = document.createElement('h3'); h.textContent = MONTH[m]+' '+y;
@@ -430,6 +437,10 @@ form.editor input{font-size:16px}
       sec.append(h,g); box.append(sec);
       m++; if (m>11){m=0;y++;}
     }
+    const pt = $('past-toggle');
+    pt.hidden = pastCount === 0;
+    pt.textContent = showPast ? 'Hide past months' : 'Show past months (' + pastCount + ')';
+    pt.setAttribute('aria-expanded', String(showPast));
   }
   function describe(n){
     const parts = [fmt(n)+', '+new Date(n*864e5).getUTCFullYear()];
