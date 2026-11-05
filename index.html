@@ -68,6 +68,12 @@ h2{font-size:22px}
 .btn.danger.armed{background:var(--holiday);color:#fff;border-color:var(--holiday)}
 .btn:focus-visible,input:focus-visible{outline:2px solid var(--travel);outline-offset:2px}
 .btn:disabled{opacity:.5;cursor:default}
+.trips-toggle{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.trips-toggle:focus-visible{outline:2px solid var(--travel);outline-offset:3px;border-radius:3px}
+.trip-count{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.chev{color:var(--muted);transition:transform .15s}
+.trips-toggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.trips.collapsed{gap:0}
 .trip-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .trip{border:1px solid var(--line);border-left:5px solid var(--tc);border-radius:5px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .trip-name{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
@@ -176,11 +182,11 @@ form.editor input{font-size:16px}
 
   <section class="trips" aria-labelledby="trips-h">
     <div class="trips-head">
-      <h2 id="trips-h">Trips</h2>
+      <h2 id="trips-h"><button class="trips-toggle" type="button" id="trips-toggle" aria-expanded="false" aria-controls="trip-list">Trips <span class="trip-count" id="trip-count"></span><svg class="chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h2>
       <button class="btn primary" id="add-btn" type="button">Add trip</button>
     </div>
     <div id="notice" class="notice" hidden></div>
-    <div class="trip-list" id="trip-list"><p class="empty">Loading your trips…</p></div>
+    <div class="trip-list" id="trip-list" hidden><p class="empty">Loading your trips…</p></div>
   </section>
 
   <div class="legend" aria-label="Legend">
@@ -336,7 +342,20 @@ form.editor input{font-size:16px}
   }
 
   // ---- trips list ----
+  let tripsOpen = false;
+  try { tripsOpen = localStorage.getItem('kr-trips-open') === '1'; } catch(e){}
+  function applyTripsOpen(){
+    $('trip-list').hidden = !tripsOpen;
+    $('trips-toggle').setAttribute('aria-expanded', String(tripsOpen));
+    $('trips-toggle').closest('.trips').classList.toggle('collapsed', !tripsOpen);
+  }
+  $('trips-toggle').onclick = () => {
+    tripsOpen = !tripsOpen; applyTripsOpen();
+    try { localStorage.setItem('kr-trips-open', tripsOpen ? '1' : '0'); } catch(e){}
+  };
+  applyTripsOpen();
   function renderTrips(){
+    $('trip-count').textContent = String(trips.length);
     const box = $('trip-list');
     box.replaceChildren();
     if (!trips.length) {

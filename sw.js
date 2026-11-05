@@ -1,5 +1,5 @@
 // Offline support: the calendar works without signal; trip changes sync when back online.
-const CACHE = "kr-shell-v4";
+const CACHE = "kr-shell-v5";
 const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "vendor/supabase.js",
   "icons/hardhat-180.png", "icons/hardhat-192.png", "icons/hardhat-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
