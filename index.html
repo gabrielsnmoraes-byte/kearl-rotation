@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rotation">
+<meta name="theme-color" content="#141817">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<title>Kearl Rotation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+/* Layout: a status strip, a trips panel, then a wall of month grids (1 col phone, 2-3 desktop). Hi-vis amber marks on-site blocks. */
+:root{
+  --bg:#eef0ec; --panel:#ffffff; --ink:#1c2220; --muted:#5d6763; --line:#d6dbd7;
+  --on-bg:#fbe3b3; --on-ink:#7a4a00; --on:#e89a0c;
+  --travel:#2c68ad; --fly-bg:#d3e2f4; --holiday:#c23a2b; --pay:#2a7d50; --today:#1c2220;
+  --t-teal:#138a7e; --t-violet:#7a4fc4; --t-coral:#d4553f; --t-magenta:#b0306f; --t-olive:#5f7f1c;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141817; --panel:#1d2220; --ink:#e7ebe8; --muted:#97a19d; --line:#323936;
+  --on-bg:#4a3510; --on-ink:#ffcf75; --on:#f0a92a;
+  --travel:#6ea5e6; --fly-bg:#1b3150; --holiday:#f07a6b; --pay:#5cc48c; --today:#e7ebe8;
+  --t-teal:#2fb8a8; --t-violet:#a684ec; --t-coral:#f07f69; --t-magenta:#e0609f; --t-olive:#9cc24a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141817; --panel:#1d2220; --ink:#e7ebe8; --muted:#97a19d; --line:#323936;
+  --on-bg:#4a3510; --on-ink:#ffcf75; --on:#f0a92a;
+  --travel:#6ea5e6; --fly-bg:#1b3150; --holiday:#f07a6b; --pay:#5cc48c; --today:#e7ebe8;
+  --t-teal:#2fb8a8; --t-violet:#a684ec; --t-coral:#f07f69; --t-magenta:#e0609f; --t-olive:#9cc24a;
+  color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+h1,h2{font-family:var(--display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:34px;line-height:1}
+h2{font-size:22px}
+.sub{color:var(--muted);margin:4px 0 0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+
+/* status strip */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.cell{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.cell .big{font-family:var(--display);font-size:28px;font-weight:700;line-height:1.05}
+.cell.now-on{background:var(--on-bg)} .cell.now-on .big{color:var(--on-ink)}
+.cell small{color:var(--muted)}
+
+/* trips */
+.trips{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.trips-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:5px;padding:8px 14px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.btn.danger{color:var(--holiday)}
+.btn.danger.armed{background:var(--holiday);color:#fff;border-color:var(--holiday)}
+.btn:focus-visible,input:focus-visible{outline:2px solid var(--travel);outline-offset:2px}
+.btn:disabled{opacity:.5;cursor:default}
+.trip-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.trip{border:1px solid var(--line);border-left:5px solid var(--tc);border-radius:5px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.trip-name{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
+.trip-dates{color:var(--muted)}
+.chip{align-self:flex-start;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--on-bg);color:var(--on-ink)}
+.chip.clear{background:transparent;color:var(--pay);border:1px solid currentColor}
+.trip-actions{display:flex;gap:8px;margin-top:4px}
+.trip-actions .btn{padding:5px 10px;font-size:13px}
+.empty{color:var(--muted);padding:8px 0}
+form.editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;border:1px dashed var(--muted);border-radius:5px;padding:14px}
+form.editor label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+form.editor input{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 9px;min-width:0}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sw[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 2px var(--panel)}
+.form-row{grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.err{color:var(--holiday);font-size:13px}
+.hint{font-size:12px;color:var(--muted)}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;color:var(--muted);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.key{width:14px;height:14px;border-radius:3px;border:1px solid var(--line)}
+
+/* months */
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.month{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.month h3{font-family:var(--display);font-size:20px;font-weight:700;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+.month h3 small{font-family:var(--body);font-size:11px;font-weight:500;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dow{font-size:10px;text-align:center;color:var(--muted);font-weight:600;letter-spacing:.06em;padding-bottom:2px}
+.day{position:relative;min-height:50px;color:inherit;font:inherit;text-align:left;align-items:flex-start;border-radius:3px;padding:3px 4px 10px;display:flex;flex-direction:column;gap:1px;background:transparent;cursor:pointer;border:1px solid transparent;min-width:0}
+.day:hover{border-color:var(--line)}
+.day.on{background:var(--on-bg)}
+.day.pad{visibility:hidden;cursor:default}
+.day .n{font-family:var(--mono);font-size:12px;line-height:1}
+.day.on .n{color:var(--on-ink)}
+.day.fly{background:var(--fly-bg)}
+.day.fly .n{color:var(--travel)}
+.day .pay.cut{background:var(--holiday)}
+.day.hol .n{color:var(--holiday);font-weight:700}
+.day.today{border:2px solid var(--today)}
+.day .tag{font-size:9px;font-weight:700;letter-spacing:.04em;color:var(--travel);line-height:1}
+.day .pay{align-self:flex-start;margin-top:auto;max-width:100%;font-family:var(--mono);font-size:9px;font-weight:500;line-height:1;color:#fff;background:var(--pay);border-radius:3px;padding:2px 3px;white-space:nowrap}
+@media (max-width:420px){.day .pay{font-size:8px;padding:2px}}
+.bars{position:absolute;left:0;right:0;bottom:2px;display:flex;flex-direction:column;gap:1px}
+.bar{height:4px;background:var(--tc)}
+.bar.s{margin-left:3px;border-radius:2px 0 0 2px}.bar.e{margin-right:3px;border-radius:0 2px 2px 0}
+.day.sel{outline:2px solid var(--travel);outline-offset:-2px}
+/* day details sheet: bottom sheet on phones, centred panel on wide screens */
+.scrim{position:fixed;inset:0;background:rgba(10,14,12,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--panel);color:var(--ink);width:100%;max-width:520px;max-height:88vh;overflow-y:auto;border-radius:14px 14px 0 0;padding:18px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+@media (min-width:700px){.scrim{align-items:center}.sheet{border-radius:12px;max-height:80vh}}
+.sheet-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sheet-date{font-family:var(--display);font-size:28px;font-weight:700;line-height:1}
+.sheet-year{color:var(--muted);font-size:13px}
+.close{font:inherit;font-size:22px;line-height:1;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:4px}
+.close:focus-visible{outline:2px solid var(--travel)}
+.facts{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.fact{display:flex;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.fact:first-child{border-top:none}
+.fact .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.fact b{font-weight:600}
+.fact span{color:var(--muted);margin-left:auto;font-size:13px;text-align:right}
+.ev{border:1px solid var(--line);border-left:5px solid var(--tc);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.ev .trip-actions{margin-top:2px}
+.sheet .editor{border:none;padding:0}
+.sheet-nav{display:flex;gap:8px}
+.sheet-nav .btn{padding:5px 10px;font-size:13px}
+.notice{background:var(--on-bg);color:var(--on-ink);padding:10px 14px;border-radius:5px;font-size:13px}
+@media (prefers-reduced-motion:no-preference){.btn,.day{transition:border-color .12s,background .12s}}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.acct{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sync{font-size:12px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.sync.off{color:var(--on-ink);background:var(--on-bg);border-color:transparent}
+.auth{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.auth form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+.auth h1{font-size:40px}
+.auth label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.auth input{font:inherit;font-size:16px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.link{background:none;border:none;color:var(--travel);font:inherit;cursor:pointer;padding:4px 0;text-align:left}
+form.editor input{font-size:16px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Kearl Rotation</h1>
+      <p class="sub">14 on / 14 off from Sep 10, 2026 · Redstone contract through Dec 2027</p>
+    </div>
+    <div class="acct" id="acct" hidden>
+      <span class="sync" id="sync" hidden></span>
+      <button class="btn" type="button" id="signout">Sign out</button>
+    </div>
+  </header>
+
+  <section class="strip" aria-label="Where you are in the rotation">
+    <div class="cell" id="now-cell"><span class="label">Today</span><span class="big" id="now-big">—</span><small id="now-sub">—</small></div>
+    <div class="cell"><span class="label" id="next-label">Next</span><span class="big mono" id="next-big">—</span><small id="next-sub">—</small></div>
+    <div class="cell"><span class="label">Next trip</span><span class="big" id="trip-big">—</span><small id="trip-sub">—</small></div>
+    <div class="cell"><span class="label">Vacation days needed</span><span class="big mono" id="vac-big">—</span><small id="vac-sub">work days covered by upcoming trips</small></div>
+  </section>
+
+  <section class="trips" aria-labelledby="trips-h">
+    <div class="trips-head">
+      <h2 id="trips-h">Trips</h2>
+      <button class="btn primary" id="add-btn" type="button">Add trip</button>
+    </div>
+    <div id="notice" class="notice" hidden></div>
+    <div class="trip-list" id="trip-list"><p class="empty">Loading your trips…</p></div>
+  </section>
+
+  <div class="legend" aria-label="Legend">
+    <span><i class="key" style="background:var(--on-bg)"></i>On site</span>
+    <span><i class="key" style="background:var(--panel)"></i>Off</span>
+    <span><i class="key" style="background:var(--fly-bg)"></i>Fly in · fly out</span>
+    <span><b class="mono" style="background:var(--pay);color:#fff;font-size:9px;padding:2px 3px;border-radius:3px;font-weight:500">108h</b>Payday, hours paid</span>
+    <span><b style="color:var(--holiday)">12</b>Alberta stat holiday</span>
+    <span><i class="key" style="background:var(--t-teal);height:5px"></i>Trip</span>
+    <span>Tap any day for details</span>
+  </div>
+
+  <section class="months" id="months" aria-label="Calendar"></section>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-date">
+    <div class="sheet-top">
+      <div><div class="sheet-date" id="sheet-date">—</div><div class="sheet-year" id="sheet-year"></div></div>
+      <div class="sheet-nav">
+        <button class="btn" type="button" id="prev-day" aria-label="Previous day">‹</button>
+        <button class="btn" type="button" id="next-day" aria-label="Next day">›</button>
+        <button class="close" type="button" id="close-sheet" aria-label="Close">×</button>
+      </div>
+    </div>
+    <div id="day-view">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="facts" id="facts"></div>
+        <div class="label" id="ev-label">Trips</div>
+        <div id="events" style="display:flex;flex-direction:column;gap:10px"></div>
+        <button class="btn primary" type="button" id="add-here">Add trip starting this day</button>
+      </div>
+    </div>
+    <form class="editor" id="editor" hidden novalidate>
+      <label>Trip name<input id="f-name" type="text" maxlength="60" placeholder="e.g. Rwanda" autocomplete="off"></label>
+      <label>Leave<input id="f-start" type="date" min="2026-01-01" max="2028-12-31"></label>
+      <label>Return<input id="f-end" type="date" min="2026-01-01" max="2028-12-31"></label>
+      <label>Note<input id="f-note" type="text" maxlength="120" placeholder="Optional" autocomplete="off"></label>
+      <div class="form-row">
+        <span class="label">Colour</span>
+        <div class="swatches" id="swatches" role="group" aria-label="Trip colour"></div>
+      </div>
+      <div class="form-row">
+        <button class="btn primary" type="submit" id="save-btn">Save trip</button>
+        <button class="btn" type="button" id="cancel-btn">Cancel</button>
+        <span class="err" id="f-err" role="alert"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="auth" id="auth" hidden>
+  <form id="auth-form" novalidate>
+    <h1>Kearl Rotation</h1>
+    <p class="sub" id="auth-sub">Sign in with your Pump &amp; Dump account.</p>
+    <label>Email<input id="a-email" type="email" autocomplete="email" required></label>
+    <label>Password<input id="a-pass" type="password" autocomplete="current-password" minlength="6" required></label>
+    <button class="btn primary" type="submit" id="a-go">Sign in</button>
+    <button class="link" type="button" id="a-mode">New here? Create an account</button>
+    <span class="err" id="a-err" role="alert"></span>
+  </form>
+</div>
+
+<script>
+(() => {
+  // ---- Rotation rules (from Gabriel's schedule) ----
+  const ROT_START = '2026-09-10';      // first day of first ON block
+  const FIRST_PAY = '2026-09-18';      // biweekly Fridays
+  const CAL_FROM = '2026-09-01', CAL_TO = '2027-12-31';
+  const HOLIDAYS = {
+    '2026-09-07':'Labour Day','2026-10-12':'Thanksgiving','2026-11-11':'Remembrance Day','2026-12-25':'Christmas Day','2026-12-26':'Boxing Day',
+    '2027-01-01':"New Year's Day",'2027-02-15':'Family Day','2027-03-26':'Good Friday','2027-05-24':'Victoria Day','2027-07-01':'Canada Day',
+    '2027-08-02':'Heritage Day','2027-09-06':'Labour Day','2027-10-11':'Thanksgiving','2027-11-11':'Remembrance Day','2027-12-25':'Christmas Day','2027-12-26':'Boxing Day'
+  };
+  const COLORS = ['teal','violet','coral','magenta','olive'];
+
+  // ---- date helpers (UTC day numbers, no timezone drift) ----
+  const toN = s => { const [y,m,d] = s.split('-').map(Number); return Date.UTC(y,m-1,d)/864e5; };
+  const toS = n => new Date(n*864e5).toISOString().slice(0,10);
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const fmt = n => { const d = new Date(n*864e5); return DOW[d.getUTCDay()]+' '+MON[d.getUTCMonth()]+' '+d.getUTCDate(); };
+  const fmtShort = n => { const d = new Date(n*864e5); return MON[d.getUTCMonth()]+' '+d.getUTCDate(); };
+  const now = new Date();
+  const TODAY = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())/864e5;
+  const R0 = toN(ROT_START), P0 = toN(FIRST_PAY);
+
+  const pos = n => (((n - R0) % 28) + 28) % 28;
+  const isOn = n => n >= R0 && pos(n) < 14;
+  const travel = n => n < R0 - 1 ? null : (pos(n) === 27 ? 'IN' : (pos(n) === 14 && n > R0 ? 'OUT' : null));
+  // Hours alternate 60 / 108 starting with 60 h on Sep 18, 2026 (matches Gabriel's Google Calendar).
+  const PAY_MOVED = {'2026-12-25':'2026-12-24'}; // holiday shift: scheduled date -> paid date
+  const PAY_ACTUAL = Object.fromEntries(Object.entries(PAY_MOVED).map(([a,b])=>[b,a]));
+  // Each cheque pays 12 h per on-site day in a 14-day period ending the Monday before payday
+  // (payday-17 .. payday-4). That reproduces the 60 / 108 alternation. Trip days that fall on
+  // on-site days are unpaid vacation and come off the cheque that covers them.
+  const SHIFT_H = 12;
+  const payBase = n => {
+    const ds = toS(n);
+    if (PAY_MOVED[ds]) return null;
+    const s = PAY_ACTUAL[ds] ? toN(PAY_ACTUAL[ds]) : n;
+    if (s < P0 || (s - P0) % 14 !== 0) return null;
+    return s;
+  };
+  const payInfo = n => {
+    const s = payBase(n); if (s == null) return null;
+    let on = 0, vac = 0;
+    for (let d = s - 17; d <= s - 4; d++) if (isOn(d)) { on++; if (tripByDay[d] && tripByDay[d].length) vac++; }
+    return {full: on*SHIFT_H, hours: (on-vac)*SHIFT_H, vac, from: s-17, to: s-4};
+  };
+  const payHours = n => { const p = payInfo(n); return p ? p.hours : null; };
+  const isPay = n => payHours(n) != null;
+
+  let trips = [];
+  let canWrite = false, signedIn = false;
+  let editingId = null, color = 'teal';
+
+  const $ = id => document.getElementById(id);
+
+  function workDays(t){ let c=0; for(let n=toN(t.start); n<=toN(t.end); n++) if(isOn(n)) c++; return c; }
+
+  // ---- status strip ----
+  function renderStrip(){
+    const nc = $('now-cell');
+    if (isOn(TODAY)) {
+      nc.classList.add('now-on');
+      $('now-big').textContent = 'On site';
+      $('now-sub').textContent = 'Day ' + (pos(TODAY)+1) + ' of 14';
+      let n = TODAY; while (isOn(n)) n++;
+      $('next-label').textContent = 'Fly out';
+      $('next-big').textContent = fmtShort(n);
+      $('next-sub').textContent = 'in ' + (n-TODAY) + (n-TODAY===1?' day':' days') + ' · ' + DOW[new Date(n*864e5).getUTCDay()];
+    } else {
+      nc.classList.remove('now-on');
+      $('now-big').textContent = 'Off';
+      $('now-sub').textContent = TODAY >= R0 ? 'Day ' + (pos(TODAY)-13) + ' of 14' : 'Rotation starts ' + fmtShort(R0);
+      let n = TODAY; while (!isOn(n)) n++;
+      $('next-label').textContent = 'Fly in';
+      $('next-big').textContent = fmtShort(n-1);
+      $('next-sub').textContent = 'first shift ' + fmt(n);
+    }
+    const upcoming = trips.filter(t => toN(t.end) >= TODAY).sort((a,b)=>a.start<b.start?-1:1);
+    const nt = upcoming[0];
+    if (nt) {
+      $('trip-big').textContent = nt.name;
+      const d = toN(nt.start) - TODAY;
+      $('trip-sub').textContent = d > 0 ? 'leaves in ' + d + (d===1?' day':' days') + ' · ' + fmtShort(toN(nt.start)) : 'underway, back ' + fmtShort(toN(nt.end));
+    } else { $('trip-big').textContent = 'None planned'; $('trip-sub').textContent = 'Add one below'; }
+    const v = upcoming.reduce((s,t)=>s+workDays(t),0);
+    $('vac-big').textContent = String(v);
+  }
+
+  // ---- trips list ----
+  function renderTrips(){
+    const box = $('trip-list');
+    box.replaceChildren();
+    if (!trips.length) {
+      const p = document.createElement('p'); p.className='empty';
+      p.textContent = signedIn ? 'No trips yet. Add your first one to see it on the calendar.' : 'Sign in to see your trips.';
+      box.append(p); return;
+    }
+    [...trips].sort((a,b)=>a.start<b.start?-1:1).forEach(t => {
+      const el = document.createElement('article'); el.className='trip';
+      el.style.setProperty('--tc', 'var(--t-'+(COLORS.includes(t.color)?t.color:'teal')+')');
+      const nm = document.createElement('div'); nm.className='trip-name'; nm.textContent=t.name;
+      const s = toN(t.start), e = toN(t.end), len = e - s + 1;
+      const dt = document.createElement('div'); dt.className='trip-dates mono';
+      dt.textContent = fmt(s) + ' → ' + fmt(e) + ' · ' + len + (len===1?' day':' days');
+      const wd = workDays(t);
+      const ch = document.createElement('span'); ch.className = 'chip' + (wd ? '' : ' clear');
+      ch.textContent = wd ? wd + ' work ' + (wd===1?'day':'days') + ' → vacation' : 'Fully in an off block';
+      el.append(nm, dt, ch);
+      if (t.note) { const no = document.createElement('div'); no.className='hint'; no.textContent=t.note; el.append(no); }
+      if (canWrite) el.append(actions(t));
+      box.append(el);
+    });
+  }
+  function tripCard(t, cls){
+    const el = document.createElement('article'); el.className = cls;
+    el.style.setProperty('--tc', 'var(--t-'+(COLORS.includes(t.color)?t.color:'teal')+')');
+    const nm = document.createElement('div'); nm.className='trip-name'; nm.textContent=t.name;
+    const s = toN(t.start), e = toN(t.end), len = e - s + 1;
+    const dt = document.createElement('div'); dt.className='trip-dates mono';
+    dt.textContent = fmt(s) + ' → ' + fmt(e) + ' · ' + len + (len===1?' day':' days');
+    const wd = workDays(t);
+    const ch = document.createElement('span'); ch.className = 'chip' + (wd ? '' : ' clear');
+    ch.textContent = wd ? wd + ' work ' + (wd===1?'day':'days') + ' → vacation' : 'Fully in an off block';
+    el.append(nm, dt, ch);
+    if (t.note) { const no = document.createElement('div'); no.className='hint'; no.textContent=t.note; el.append(no); }
+    if (canWrite) el.append(actions(t));
+    return el;
+  }
+  function actions(t){
+    const act = document.createElement('div'); act.className='trip-actions';
+    const eb = document.createElement('button'); eb.type='button'; eb.className='btn'; eb.textContent='Edit';
+    eb.onclick = () => openEditor(t);
+    const db_ = document.createElement('button'); db_.type='button'; db_.className='btn danger'; db_.textContent='Delete';
+    db_.onclick = async () => {
+      if (!db_.classList.contains('armed')) { db_.classList.add('armed'); db_.textContent='Confirm delete'; setTimeout(()=>{db_.classList.remove('armed');db_.textContent='Delete';},4000); return; }
+      db_.disabled = true;
+      try { await removeTrip(t.id); }
+      catch(err){ showNotice('Could not delete that trip. Try again.'); db_.disabled=false; }
+    };
+    act.append(eb, db_);
+    return act;
+  }
+
+  // ---- calendar ----
+  let tripByDay = {};
+  function indexTrips(){
+    tripByDay = {};
+    trips.forEach(t => { for(let n=toN(t.start); n<=toN(t.end); n++) (tripByDay[n] ||= []).push(t); });
+  }
+  function renderMonths(){
+    const box = $('months'); box.replaceChildren();
+    const from = new Date(toN(CAL_FROM)*864e5), to = new Date(toN(CAL_TO)*864e5);
+    let y = from.getUTCFullYear(), m = from.getUTCMonth();
+    while (y < to.getUTCFullYear() || (y === to.getUTCFullYear() && m <= to.getUTCMonth())) {
+      const sec = document.createElement('div'); sec.className='month'; sec.id='m-'+y+'-'+(m+1);
+      const first = Date.UTC(y,m,1)/864e5, days = new Date(Date.UTC(y,m+1,0)).getUTCDate();
+      let on = 0; for (let i=0;i<days;i++) if (isOn(first+i)) on++;
+      const h = document.createElement('h3'); h.textContent = MONTH[m]+' '+y;
+      const sm = document.createElement('small'); sm.textContent = on + ' days on site'; h.append(sm);
+      const g = document.createElement('div'); g.className='grid';
+      ['S','M','T','W','T','F','S'].forEach(d=>{const e=document.createElement('div');e.className='dow';e.textContent=d;g.append(e);});
+      const lead = new Date(first*864e5).getUTCDay();
+      for (let i=0;i<lead;i++){const p=document.createElement('div');p.className='day pad';g.append(p);}
+      for (let i=0;i<days;i++){
+        const n = first+i, ds = toS(n);
+        const c = document.createElement('button'); c.type='button'; c.className='day'; c.dataset.n = n;
+        if (isOn(n)) c.classList.add('on');
+        if (travel(n)) c.classList.add('fly');
+        if (HOLIDAYS[ds]) c.classList.add('hol');
+        if (n === TODAY) c.classList.add('today');
+        const num = document.createElement('span'); num.className='n'; num.textContent = i+1; c.append(num);
+        const tv = travel(n); if (tv){ const tg=document.createElement('span'); tg.className='tag'; tg.textContent=tv; c.append(tg); }
+        const pi = payInfo(n);
+        if (pi){ const p=document.createElement('span'); p.className='pay'+(pi.vac?' cut':''); p.textContent=pi.hours+'h'; c.append(p); }
+        const ts = tripByDay[n];
+        if (ts){ const bs=document.createElement('div'); bs.className='bars';
+          ts.forEach(t=>{const b=document.createElement('i'); b.className='bar'+(n===toN(t.start)?' s':'')+(n===toN(t.end)?' e':'');
+            b.style.setProperty('--tc','var(--t-'+(COLORS.includes(t.color)?t.color:'teal')+')'); bs.append(b);});
+          c.append(bs); }
+        c.setAttribute('aria-label', describe(n));
+        g.append(c);
+      }
+      sec.append(h,g); box.append(sec);
+      m++; if (m>11){m=0;y++;}
+    }
+  }
+  function describe(n){
+    const parts = [fmt(n)+', '+new Date(n*864e5).getUTCFullYear()];
+    parts.push(n < R0 ? 'before rotation' : isOn(n) ? 'on site, day '+(pos(n)+1)+' of 14' : 'off');
+    const tv = travel(n); if (tv) parts.push(tv==='IN'?'fly in':'fly out');
+    if (isPay(n)) parts.push('payday, ' + payHours(n) + ' hours');
+    if (HOLIDAYS[toS(n)]) parts.push(HOLIDAYS[toS(n)]);
+    (tripByDay[n]||[]).forEach(t=>parts.push(t.name));
+    return parts.join(' · ');
+  }
+  $('months').addEventListener('click', e => {
+    const d = e.target.closest('.day[data-n]'); if (!d) return;
+    showDay(+d.dataset.n);
+  });
+
+  // ---- day details sheet ----
+  let selDay = null, lastFocus = null;
+  const FULLDOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function openSheet(){
+    if ($('scrim').hidden) { lastFocus = document.activeElement; $('scrim').hidden = false; document.body.style.overflow='hidden'; }
+  }
+  function closeSheet(){
+    $('scrim').hidden = true; document.body.style.overflow='';
+    selDay = null; editingId = null; markSel();
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  function markSel(){
+    document.querySelectorAll('.day.sel').forEach(x=>x.classList.remove('sel'));
+    if (selDay != null) { const c = document.querySelector('.day[data-n="'+selDay+'"]'); if (c) c.classList.add('sel'); }
+  }
+  function fact(color, title, detail){
+    const f = document.createElement('div'); f.className='fact';
+    const dot = document.createElement('i'); dot.className='dot'; dot.style.background=color;
+    const b = document.createElement('b'); b.textContent = title;
+    f.append(dot, b);
+    if (detail) { const s=document.createElement('span'); s.textContent=detail; f.append(s); }
+    return f;
+  }
+  function showDay(n){
+    selDay = n; editingId = null;
+    const d = new Date(n*864e5);
+    $('sheet-date').textContent = FULLDOW[d.getUTCDay()] + ', ' + MON[d.getUTCMonth()] + ' ' + d.getUTCDate();
+    $('sheet-year').textContent = String(d.getUTCFullYear());
+    $('day-view').hidden = false; $('editor').hidden = true;
+    $('prev-day').hidden = false; $('next-day').hidden = false;
+    const facts = $('facts'); facts.replaceChildren();
+    if (n < R0) facts.append(fact('var(--line)', 'Before your rotation', 'starts ' + fmtShort(R0)));
+    else if (isOn(n)) {
+      let end = n; while (isOn(end+1)) end++;
+      facts.append(fact('var(--on)', 'On site', 'day ' + (pos(n)+1) + ' of 14 · ends ' + fmtShort(end)));
+    } else {
+      let back = n; while (!isOn(back+1)) back++;
+      facts.append(fact('var(--line)', 'Off', 'day ' + (pos(n)-13) + ' of 14 · back on ' + fmtShort(back+1)));
+    }
+    const tv = travel(n);
+    if (tv === 'IN') facts.append(fact('var(--travel)', 'Fly in', 'first shift tomorrow'));
+    if (tv === 'OUT') facts.append(fact('var(--travel)', 'Fly out', 'heading home'));
+    const pi = payInfo(n);
+    if (pi) {
+      const per = 'for ' + fmtShort(pi.from) + ' – ' + fmtShort(pi.to);
+      facts.append(fact(pi.vac ? 'var(--holiday)' : 'var(--pay)', 'Payday · ' + pi.hours + ' h',
+        (pi.vac ? pi.full + ' h minus ' + pi.vac + ' vacation ' + (pi.vac===1?'day':'days') + ' · ' : '') + per + (PAY_ACTUAL[toS(n)] ? ' · paid early for Christmas' : '')));
+    }
+    if (HOLIDAYS[toS(n)]) facts.append(fact('var(--holiday)', HOLIDAYS[toS(n)], 'Alberta stat holiday'));
+    const ev = $('events'); ev.replaceChildren();
+    const ts = (tripByDay[n] || []).slice().sort((a,b)=>a.start<b.start?-1:1);
+    $('ev-label').textContent = ts.length ? 'Trips' : 'No trips this day';
+    ts.forEach(t => ev.append(tripCard(t, 'ev')));
+    $('add-here').hidden = !canWrite;
+    openSheet(); markSel();
+    if (!$('sheet').contains(document.activeElement)) $('close-sheet').focus();
+  }
+  $('prev-day').onclick = () => { if (selDay != null) showDay(selDay - 1); };
+  $('next-day').onclick = () => { if (selDay != null) showDay(selDay + 1); };
+  $('close-sheet').onclick = closeSheet;
+  $('scrim').addEventListener('click', e => { if (e.target === $('scrim')) closeSheet(); });
+  document.addEventListener('keydown', e => {
+    if ($('scrim').hidden) return;
+    if (e.key === 'Escape') { if (!$('editor').hidden && selDay != null) showDay(selDay); else closeSheet(); }
+    else if ($('editor').hidden && selDay != null && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) showDay(selDay + (e.key==='ArrowRight'?1:-1));
+  });
+  $('add-here').onclick = () => openEditor(null, selDay);
+
+  // ---- editor ----
+  function buildSwatches(){
+    const box = $('swatches'); box.replaceChildren();
+    COLORS.forEach(c => { const b=document.createElement('button'); b.type='button'; b.className='sw';
+      b.style.background='var(--t-'+c+')'; b.setAttribute('aria-label',c); b.setAttribute('aria-pressed', String(c===color));
+      b.onclick=()=>{color=c;buildSwatches();}; box.append(b); });
+  }
+  function openEditor(t, startN){
+    editingId = t ? t.id : null;
+    const s0 = startN != null ? toS(startN) : '';
+    $('f-name').value = t ? t.name : ''; $('f-start').value = t ? t.start : s0; $('f-end').value = t ? t.end : s0;
+    $('f-note').value = t ? (t.note||'') : ''; color = t ? (t.color||'teal') : COLORS[trips.length % COLORS.length];
+    $('save-btn').textContent = t ? 'Save changes' : 'Add trip';
+    $('sheet-date').textContent = t ? 'Edit trip' : 'New trip';
+    $('sheet-year').textContent = t ? t.name : '';
+    $('prev-day').hidden = true; $('next-day').hidden = true;
+    $('f-err').textContent=''; buildSwatches();
+    $('day-view').hidden = true; $('editor').hidden = false;
+    openSheet(); $('f-name').focus();
+  }
+  function closeEditor(){ editingId=null; if (selDay != null) showDay(selDay); else closeSheet(); }
+  $('add-btn').onclick = () => { selDay = null; openEditor(null); };
+  $('cancel-btn').onclick = closeEditor;
+  $('editor').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('f-name').value.trim(), start = $('f-start').value, end = $('f-end').value, note = $('f-note').value.trim();
+    if (!name) return $('f-err').textContent='Give the trip a name.';
+    if (!start || !end) return $('f-err').textContent='Pick both a leave and a return date.';
+    if (end < start) return $('f-err').textContent='Return date is before the leave date.';
+    $('f-err').textContent=''; $('save-btn').disabled=true;
+    const body = {name, start, end, note, color, updatedAt: new Date().toISOString()};
+    try {
+      await saveTrip(editingId || newId(), body);
+      closeEditor();
+    } catch(err){ $('f-err').textContent = 'Could not save that trip. Try again.'; }
+    $('save-btn').disabled=false;
+  });
+
+  function showNotice(t){ const n=$('notice'); n.textContent=t; n.hidden=false; }
+
+  function renderAll(){ indexTrips(); renderStrip(); renderTrips(); renderMonths(); }
+
+  // first paint without trips
+  $('add-btn').hidden = true;
+  renderAll();
+  // scroll current month into view on wide screens? keep top; jump link handled by user
+  const cur = document.getElementById('m-'+new Date(TODAY*864e5).getUTCFullYear()+'-'+(new Date(TODAY*864e5).getUTCMonth()+1));
+
+  // ---- data: Supabase account + phone cache + offline outbox ----
+  const CFG = window.PD_CONFIG || {};
+  let sb = null, uid = null, outbox = {up:{}, del:{}};
+  const cacheKey = () => 'kr-trips-' + uid, outKey = () => 'kr-outbox-' + uid;
+  function newId(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function saveCache(){ try { localStorage.setItem(cacheKey(), JSON.stringify(trips)); localStorage.setItem(outKey(), JSON.stringify(outbox)); } catch(e){} }
+  function loadCache(){
+    try { trips = JSON.parse(localStorage.getItem(cacheKey()) || '[]'); } catch(e){ trips = []; }
+    try { outbox = Object.assign({up:{}, del:{}}, JSON.parse(localStorage.getItem(outKey()) || '{}')); } catch(e){ outbox = {up:{}, del:{}}; }
+  }
+  const pending = () => Object.keys(outbox.up).length + Object.keys(outbox.del).length;
+  function setSync(state){
+    const el = $('sync');
+    if (state === 'offline' && pending()) { el.hidden = false; el.className = 'sync off'; el.textContent = 'Offline · saved on phone'; }
+    else if (state === 'offline') { el.hidden = false; el.className = 'sync off'; el.textContent = 'Offline'; }
+    else if (state === 'saving') { el.hidden = false; el.className = 'sync'; el.textContent = 'Syncing…'; }
+    else el.hidden = true;
+  }
+  function refresh(){
+    trips = trips.filter(t => t && t.start && t.end && t.name);
+    renderAll(); markSel();
+    if (!$('scrim').hidden && $('editor').hidden && selDay != null) showDay(selDay);
+  }
+  async function flush(){
+    if (!sb || !uid || !pending()) { setSync(navigator.onLine === false ? 'offline' : 'ok'); return; }
+    if (navigator.onLine === false) { setSync('offline'); return; }
+    setSync('saving');
+    try {
+      for (const id of Object.keys(outbox.del)) {
+        const { error } = await sb.from('trips').delete().eq('id', id); if (error) throw error;
+        delete outbox.del[id]; saveCache();
+      }
+      const ups = Object.values(outbox.up);
+      if (ups.length) {
+        const rows = ups.map(t => { const { id, ...data } = t; return { id, data, updated_at: new Date().toISOString() }; });
+        const { error } = await sb.from('trips').upsert(rows); if (error) throw error;
+        outbox.up = {}; saveCache();
+      }
+      setSync('ok');
+    } catch(e){ console.warn('sync failed', e); setSync('offline'); }
+  }
+  async function pull(){
+    if (!sb || navigator.onLine === false) return;
+    const { data, error } = await sb.from('trips').select('id,data');
+    if (error) throw error;
+    const server = data.map(r => ({ ...r.data, id: r.id })).filter(t => !outbox.del[t.id]);
+    for (const t of Object.values(outbox.up)) { const k = server.findIndex(x => x.id === t.id); if (k >= 0) server[k] = t; else server.push(t); }
+    trips = server; saveCache(); refresh();
+  }
+  async function saveTrip(id, body){
+    const t = { ...body, id };
+    const k = trips.findIndex(x => x.id === id);
+    if (k >= 0) trips[k] = t; else trips.push(t);
+    outbox.up[id] = t; delete outbox.del[id]; saveCache(); refresh(); flush();
+  }
+  async function removeTrip(id){
+    trips = trips.filter(x => x.id !== id);
+    delete outbox.up[id]; outbox.del[id] = true; saveCache(); refresh(); flush();
+  }
+  function startSession(user){
+    uid = user.id; signedIn = true; canWrite = true;
+    $('auth').hidden = true; $('acct').hidden = false; $('add-btn').hidden = false;
+    loadCache(); refresh();
+    pull().catch(() => setSync('offline')).then(() => flush());
+  }
+  window.addEventListener('online', () => { pull().catch(()=>{}).then(() => flush()); });
+  window.addEventListener('offline', () => setSync('offline'));
+  document.addEventListener('visibilitychange', () => {
+    if (!uid) return;
+    if (document.visibilityState === 'hidden') flush();
+    else if ($('editor').hidden) pull().catch(() => setSync('offline'));
+  });
+
+  // ---- sign in ----
+  let mode = 'signin';
+  $('a-mode').onclick = () => {
+    mode = mode === 'signin' ? 'signup' : 'signin';
+    $('a-go').textContent = mode === 'signin' ? 'Sign in' : 'Create account';
+    $('a-mode').textContent = mode === 'signin' ? 'New here? Create an account' : 'Have an account? Sign in';
+    $('a-pass').autocomplete = mode === 'signin' ? 'current-password' : 'new-password';
+    $('a-err').textContent = '';
+  };
+  $('auth-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = $('a-email').value.trim(), pass = $('a-pass').value;
+    if (!email || pass.length < 6) { $('a-err').textContent = 'Enter your email and a password of at least 6 characters.'; return; }
+    $('a-go').disabled = true; $('a-err').textContent = '';
+    try {
+      if (mode === 'signin') {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: pass }); if (error) throw error;
+        startSession(data.user);
+      } else {
+        const { data, error } = await sb.auth.signUp({ email, password: pass, options: { emailRedirectTo: location.href.split('#')[0] } }); if (error) throw error;
+        if (data.session) startSession(data.user); else $('a-err').textContent = 'Check your email to confirm your account, then sign in.';
+      }
+    } catch(err){
+      $('a-err').textContent = navigator.onLine === false ? 'You are offline. Connect to sign in.' : (/invalid login/i.test(err.message||'') ? 'Wrong email or password.' : (err.message || 'Could not sign in.'));
+    }
+    $('a-go').disabled = false;
+  });
+  $('signout').onclick = async () => {
+    await flush();
+    try { await sb.auth.signOut(); } catch(e){}
+    try { localStorage.removeItem(cacheKey()); localStorage.removeItem(outKey()); } catch(e){}
+    uid = null; signedIn = false; canWrite = false; trips = []; outbox = {up:{}, del:{}};
+    $('acct').hidden = true; $('add-btn').hidden = true; refresh(); $('auth').hidden = false;
+  };
+
+  (async () => {
+    if (!window.supabase || !CFG.url || !CFG.anonKey) { showNotice('Trip sync is not set up yet, so the calendar shows your rotation only.'); return; }
+    sb = window.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'kr-auth' } });
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) startSession(data.session.user);
+    else $('auth').hidden = false;
+  })();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
